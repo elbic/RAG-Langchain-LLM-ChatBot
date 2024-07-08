@@ -1,0 +1,66 @@
+services:
+  chatbot_api:
+    build:
+      context: "."
+      args:
+        - "DEBUG=${DEBUG:-false}"
+    env_file:
+      - "chatbot_api/.env"
+    ports:
+      - "8000:8000"
+    restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
+    stop_grace_period: "3s"
+    tty: true
+    volumes:
+      - "${DOCKER_WEB_VOLUME:-./public_collected:/app/public_collected}"
+      - "./chatbot_api:/chatbot_api"
+
+  weaviate:
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --scheme
+      - http
+    image: cr.weaviate.io/semitechnologies/weaviate:1.24.1
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - "weaviate_data:/var/lib/weaviate"
+    restart: on-failure:0
+    environment:
+      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
+      OPENAI_APIKEY: "${OPENAI_API_KEY}"
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
+      ENABLE_MODULES: 'text2vec-transformers,text2vec-openai,ref2vec-centroid,generative-openai'
+      CLUSTER_HOSTNAME: 'node1'
+
+  t2v-transformers:
+    image: cr.weaviate.io/semitechnologies/transformers-inference:sentence-transformers-multi-qa-MiniLM-L6-cos-v1
+    environment:
+      ENABLE_CUDA: '0'
+
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: "${DOCKER_POSTGRES_CPUS:-0}"
+          memory: "${DOCKER_POSTGRES_MEMORY:-0}"
+    env_file:
+      - ".env"
+    image: "postgres:14.2-bullseye"
+    restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
+    stop_grace_period: "3s"
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data"
+    ports:
+      - "5432:5432"
+
+volumes:
+  weaviate_data: {}
+  postgres_data: {}
