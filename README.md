@@ -26,6 +26,7 @@
    - Support
    - Feedback
 
+![Image Description](assets/images/combined_horizontal_image.png)
 
 ### Introduction
 - **Overview:** The RAG LLM ChatBot leverages Langchain to provide a robust and flexible framework for building intelligent chatbots. It combines the power of retrieval-augmented generation (RAG) with large language models (LLMs) to deliver precise and context-aware responses.
