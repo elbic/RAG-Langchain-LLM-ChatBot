@@ -5,7 +5,7 @@ services:
       args:
         - "DEBUG=${DEBUG:-false}"
     env_file:
-      - "chatbot_api/.env"
+      - ".env"
     ports:
       - "8000:8000"
     restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
