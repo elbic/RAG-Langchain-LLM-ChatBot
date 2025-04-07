@@ -11,6 +11,7 @@
 3. **Usage**
    - Basic Usage
    - Advanced Configuration
+   - Data Management
 4. **Examples**
    - Simple Query Example
    - Complex Query Example
@@ -47,6 +48,13 @@
 - **Advanced Configuration:** 
   - Customize the chatbot's behavior through configuration files.
   - Example: Adjusting the retrieval model settings and response generation parameters.
+- **Data Management:** 
+  - Manage the chatbot's knowledge base and data sources.
+  - Example: Adding new data, updating existing data, or removing outdated data.
+  - The project uses a shared data directory (`./data`) that is mounted to the Docker container.
+  - Place your CSV files in this directory to be automatically ingested by the system.
+  - You can update the data without rebuilding the Docker container.
+  - The system will automatically detect and load all CSV files in the data directory.
 
 ### Examples
 - **Simple Query Example:** 

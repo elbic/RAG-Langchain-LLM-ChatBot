@@ -4,6 +4,8 @@ import logging
 import os
 import re
 import weaviate
+import glob
+import csv
 
 from chatbot_api.parsers import custom_site_extractor
 from bs4 import BeautifulSoup, SoupStrainer
@@ -107,16 +109,24 @@ def simple_extractor(html: str) -> str:
 
 
 def load_custom_stock():
-    """Load the custom stock using a CSVLoader.
+    """Load all CSV files from the data directory.
 
     Returns:
-        list: The loaded documents from the custom stock.
+        list: The loaded documents from all CSV files in the data directory.
     """
-    return CSVLoader(
-        file_path="./csv/stock.csv",
-        csv_args={
-            "delimiter": ",",
-            "fieldnames": [
+    data_dir = os.environ.get("DATA_DIR", "/app/data")
+    csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
+    
+    if not csv_files:
+        logger.warning(f"No CSV files found in {data_dir}")
+        return []
+    
+    all_docs = []
+    for csv_file in csv_files:
+        logger.info(f"Loading CSV file: {csv_file}")
+        try:
+            # Default fieldnames for stock data
+            fieldnames = [
                 "stock_id",
                 "km",
                 "price",
@@ -129,9 +139,29 @@ def load_custom_stock():
                 "ancho",
                 "altura",
                 "car_play",
-            ],
-        },
-    ).load()
+            ]
+            
+            # Try to detect fieldnames from the CSV file
+            with open(csv_file, 'r') as f:
+                reader = csv.reader(f)
+                header = next(reader, None)
+                if header:
+                    fieldnames = header
+            
+            docs = CSVLoader(
+                file_path=csv_file,
+                csv_args={
+                    "delimiter": ",",
+                    "fieldnames": fieldnames,
+                },
+            ).load()
+            
+            all_docs.extend(docs)
+            logger.info(f"Loaded {len(docs)} documents from {csv_file}")
+        except Exception as e:
+            logger.error(f"Error loading {csv_file}: {str(e)}")
+    
+    return all_docs
 
 
 def ingest_docs():
@@ -164,15 +194,18 @@ def ingest_docs():
     )
     record_manager.create_schema()
 
-    docs_from_custom = load_custom_site()
-    logger.info(f"Loaded {len(docs_from_custom)} docs from custom")
+    #docs_from_custom = load_custom_site()
+    #logger.info(f"Loaded {len(docs_from_custom)} docs from custom")
     docs_from_custom_stock = load_custom_stock()
     logger.info(f"Loaded {len(docs_from_custom_stock)} docs from custom stock")
-    docs_from_custom_blog = load_custom_blog()
-    logger.info(f"Loaded {len(docs_from_custom_blog)} docs from custom blog")
+    #docs_from_custom_blog = load_custom_blog()
+    #logger.info(f"Loaded {len(docs_from_custom_blog)} docs from custom blog")
 
+    #docs_transformed = text_splitter.split_documents(
+    #    docs_from_custom + docs_from_custom_stock + docs_from_custom_blog
+    #)
     docs_transformed = text_splitter.split_documents(
-        docs_from_custom + docs_from_custom_stock + docs_from_custom_blog
+        docs_from_custom_stock
     )
     docs_transformed = [doc for doc in docs_transformed if len(doc.page_content) > 10]
 

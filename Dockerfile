@@ -22,9 +22,8 @@ ENV DEBUG="${DEBUG}" \
     PYTHONUNBUFFERED="true" \
     PYTHONPATH="/"
 
-# Copy the Python source code and CSV data into the container
+# Copy the Python source code into the container
 COPY ./chatbot_api/*.py ./
-COPY ./chatbot_api/csv ./csv
 
 # Set the working directory to the current directory (where the source code is located)
 WORKDIR ./

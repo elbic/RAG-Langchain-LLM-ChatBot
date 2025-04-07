@@ -14,6 +14,7 @@ services:
     volumes:
       - "${DOCKER_WEB_VOLUME:-./public_collected:/app/public_collected}"
       - "./chatbot_api:/chatbot_api"
+      - "./data:/app/data"
 
   weaviate:
     command:
