@@ -11,12 +11,13 @@ from uuid import UUID
 
 import langsmith
 from chatbot_api.chains import ChatRequest, answer_chain
-from fastapi import FastAPI, Form, Response
+from fastapi import FastAPI, Form, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langserve import add_routes
 from langsmith import Client
 from pydantic import BaseModel
 from twilio.twiml.messaging_response import MessagingResponse
+import requests
 
 
 # Initialize the LangSmith client
@@ -55,6 +56,53 @@ async def chat(From: str = Form(...), Body: str = Form(...)):
     msg = response.message(f"{ans}")
     return Response(content=str(response), media_type="application/xml")
 
+@app.post("/telegram-webhook")
+async def telegram_webhook(request: Request):
+    """
+    Handles incoming messages from Telegram.
+    
+    This endpoint receives updates from Telegram, processes them using the answer_chain,
+    and sends the response back to the user via Telegram's API.
+    
+    Args:
+        request (Request): The incoming request from Telegram containing the update.
+    
+    Returns:
+        dict: A response indicating success.
+    """
+    update = await request.json()
+    
+    # Extract message data from the update
+    if "message" in update and "text" in update["message"]:
+        chat_id = update["message"]["chat"]["id"]
+        message_text = update["message"]["text"]
+        
+        # Process the message using our existing chain
+        ans = answer_chain.invoke({'question': message_text, 'chat_history': None})
+        
+        # Send the response back to Telegram
+        # Get the Telegram bot token from environment variables
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        
+        if not bot_token:
+            return {"status": "error", "message": "Telegram bot token not configured"}
+        
+        # Send the response back to the user
+        telegram_api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": ans,
+            "parse_mode": "HTML"  # Allow HTML formatting in the response
+        }
+        
+        response = requests.post(telegram_api_url, json=payload)
+        
+        if response.status_code == 200:
+            return {"status": "success", "message": "Response sent to user"}
+        else:
+            return {"status": "error", "message": f"Failed to send response: {response.text}"}
+    
+    return {"status": "no message to process"}
 
 # Add routes to the application
 add_routes(
