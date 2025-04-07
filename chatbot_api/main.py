@@ -11,7 +11,8 @@ from uuid import UUID
 
 import langsmith
 from chatbot_api.chains import ChatRequest, answer_chain
-from fastapi import FastAPI, Form, Response, Request
+from chatbot_api.chains.session import SessionManager
+from fastapi import FastAPI, Form, Response, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from langserve import add_routes
 from langsmith import Client
@@ -25,6 +26,9 @@ client = Client()
 
 # Initialize the FastAPI application
 app = FastAPI()
+
+# Initialize the session manager
+session_manager = SessionManager()
 
 # Configure CORS middleware
 app.add_middleware(
@@ -51,7 +55,25 @@ async def chat(From: str = Form(...), Body: str = Form(...)):
     Returns:
         Response: A FastAPI Response object containing the TwiML response.
     """
-    ans = answer_chain.invoke({'question': Body, 'chat_history': None})
+    # Create a session ID based on the phone number
+    session_id = f"twilio_{From}"
+    
+    # Get or create session
+    session = session_manager.get_session(session_id)
+    if not session:
+        session_manager.create_session(session_id)
+        session = session_manager.get_session(session_id)
+    
+    # Get chat history from session
+    chat_history = session.get_history()
+    
+    # Process the request using the answer chain
+    ans = answer_chain.invoke({'question': Body, 'chat_history': chat_history})
+    
+    # Update session history
+    session.add_message('human', Body)
+    session.add_message('ai', ans)
+    
     response = MessagingResponse()
     msg = response.message(f"{ans}")
     return Response(content=str(response), media_type="application/xml")
@@ -77,8 +99,24 @@ async def telegram_webhook(request: Request):
         chat_id = update["message"]["chat"]["id"]
         message_text = update["message"]["text"]
         
+        # Create a session ID based on the chat ID
+        session_id = f"telegram_{chat_id}"
+        
+        # Get or create session
+        session = session_manager.get_session(session_id)
+        if not session:
+            session_manager.create_session(session_id)
+            session = session_manager.get_session(session_id)
+        
+        # Get chat history from session
+        chat_history = session.get_history()
+        
         # Process the message using our existing chain
-        ans = answer_chain.invoke({'question': message_text, 'chat_history': None})
+        ans = answer_chain.invoke({'question': message_text, 'chat_history': chat_history})
+        
+        # Update session history
+        session.add_message('human', message_text)
+        session.add_message('ai', ans)
         
         # Send the response back to Telegram
         # Get the Telegram bot token from environment variables
@@ -113,6 +151,45 @@ add_routes(
     config_keys=["metadata", "configurable", "tags"],
 )
 
+# Custom chat endpoint with session management
+@app.post("/chat-with-history")
+async def chat_with_history(request: ChatRequest):
+    """Handle chat requests with session management."""
+    # Create or get session
+    if not request.session_id:
+        request.session_id = session_manager.create_session()
+    
+    session = session_manager.get_session(request.session_id)
+    if not session:
+        session = session_manager.create_session(request.session_id)
+    
+    # Get chat history from session
+    request.chat_history = session.get_history()
+    
+    # Process the request using the answer chain
+    response = answer_chain.invoke({
+        'question': request.question,
+        'chat_history': request.chat_history
+    })
+    
+    # Update session history
+    session.add_message('human', request.question)
+    session.add_message('ai', response)
+    
+    return {
+        'answer': response,
+        'session_id': request.session_id
+    }
+
+@app.delete("/chat/{session_id}")
+async def clear_chat_history(session_id: str):
+    """Clear chat history for a session."""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session_manager.delete_session(session_id)
+    return {"status": "success", "message": "Chat history cleared"}
 
 class SendFeedbackBody(BaseModel):
     """Model for the body of the send feedback request."""

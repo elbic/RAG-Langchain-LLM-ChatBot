@@ -74,7 +74,11 @@ class ChatRequest(BaseModel):
     This model defines the structure of the chat request, which includes a question and an optional chat history.
     """
     question: str
-    chat_history: Optional[List[Dict[str, str]]]
+    chat_history: Optional[List[Dict[str, str]]] = []
+    session_id: Optional[str] = None  # Add this to track different chat sessions
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 def get_retriever() -> BaseRetriever:
