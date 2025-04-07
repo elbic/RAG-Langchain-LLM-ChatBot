@@ -10,7 +10,7 @@ import csv
 from chatbot_api.parsers import custom_site_extractor
 from bs4 import BeautifulSoup, SoupStrainer
 from chatbot_api.constants import WEAVIATE_DOCS_INDEX_NAME
-from langchain.document_loaders import RecursiveUrlLoader, SitemapLoader, CSVLoader
+from langchain.document_loaders import RecursiveUrlLoader, SitemapLoader, CSVLoader, UnstructuredMarkdownLoader
 from langchain.indexes import SQLRecordManager, index
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.utils.html import PREFIXES_TO_IGNORE_REGEX, SUFFIXES_TO_IGNORE_REGEX
@@ -164,10 +164,41 @@ def load_custom_stock():
     return all_docs
 
 
+def load_markdown_files():
+    """Load all Markdown files from the data/markdown directory.
+
+    Returns:
+        list: The loaded documents from all Markdown files in the data/markdown directory.
+    """
+    data_dir = os.environ.get("DATA_DIR", "/app/data")
+    markdown_dir = os.path.join(data_dir, "markdown")
+    markdown_files = glob.glob(os.path.join(markdown_dir, "*.md"))
+    
+    if not markdown_files:
+        logger.warning(f"No Markdown files found in {markdown_dir}")
+        return []
+    
+    all_docs = []
+    for markdown_file in markdown_files:
+        logger.info(f"Loading Markdown file: {markdown_file}")
+        try:
+            docs = UnstructuredMarkdownLoader(
+                file_path=markdown_file,
+            ).load()
+            
+            all_docs.extend(docs)
+            logger.info(f"Loaded {len(docs)} documents from {markdown_file}")
+        except Exception as e:
+            logger.error(f"Error loading {markdown_file}: {str(e)}")
+    
+    return all_docs
+
+
 def ingest_docs():
     """Ingest documents into Weaviate.
 
-    This function loads documents from the custom site, custom stock, and custom blog, transforms them, and ingests them into Weaviate.
+    This function loads documents from the custom site, custom stock, custom blog, and markdown files,
+    transforms them, and ingests them into Weaviate.
     """
     WEAVIATE_URL = os.environ["WEAVIATE_URL"]
     WEAVIATE_API_KEY = os.environ["WEAVIATE_API_KEY"]
@@ -200,12 +231,14 @@ def ingest_docs():
     logger.info(f"Loaded {len(docs_from_custom_stock)} docs from custom stock")
     #docs_from_custom_blog = load_custom_blog()
     #logger.info(f"Loaded {len(docs_from_custom_blog)} docs from custom blog")
+    docs_from_markdown = load_markdown_files()
+    logger.info(f"Loaded {len(docs_from_markdown)} docs from markdown files")
 
     #docs_transformed = text_splitter.split_documents(
     #    docs_from_custom + docs_from_custom_stock + docs_from_custom_blog
     #)
     docs_transformed = text_splitter.split_documents(
-        docs_from_custom_stock
+        docs_from_custom_stock + docs_from_markdown
     )
     docs_transformed = [doc for doc in docs_transformed if len(doc.page_content) > 10]
 

@@ -29,6 +29,8 @@ psycopg2-binary = "^2.9.9"
 lxml = "^5.2.2"
 black = "^24.4.2"
 twilio = "^9.2.3"
+unstructured = "^0.17.2"
+markdown = "^3.7"
 
 
 [build-system]
